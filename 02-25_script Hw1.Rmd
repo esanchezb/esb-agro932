@@ -88,6 +88,17 @@ ls sorted*.bam > bam.txt
 cp out.sfs ../../cache/
 ```
 
+```{bash, eval=FALSE}
+#first generate .saf file [alternative to see more data - but I obtained the same]
+../../../bin/angsd/angsd -bam bam.txt -doSaf 1 -out smallFolded -anc ../../../largedata/PhaVulg1_0.fa -GL 2
+#now try the EM optimization with 4 threads
+../../../bin/angsd/misc/realSFS smallFolded.saf.idx -maxIter 100 -P 4 > smallFolded.sfs
+#in R
+sfs<-scan("cache/smallFolded.sfs")
+barplot(sfs[-1])
+```
+
+
 # Calculate $\theta$ values
 ```{bash, eval=FALSE}
 ../../../bin/angsd/angsd -bam bam.txt -out out_ang -doThetas 1 -doSaf 1 -pest out.sfs -anc ../../../largedata/PhaVulg1_0.fa -GL 1
@@ -99,16 +110,174 @@ cp theta.txt ../../cache/
 
 # Calculate $F_{ST}$ values
 ```{bash, eval=FALSE}
+# pop1 = l1-l5
+# pop2 = l5-l10
+cp bam.txt pop1.txt
+cp bam.txt pop2.txt
 
+../../../bin/angsd/angsd -b pop1.txt -anc ../../../largedata/PhaVulg1_0.fa -out pop1 -dosaf 1 -gl 1
+
+../../../bin/angsd/angsd -b pop2.txt -anc ../../../largedata/PhaVulg1_0.fa -out pop2 -dosaf 1 -gl 1
+
+# calculate the 2dsfs prior
+../../../bin/angsd/misc/realSFS pop1.saf.idx pop2.saf.idx > pop1.pop2.ml
+
+# prepare the fst for easy window analysis
+../../../bin/angsd/misc/realSFS fst index pop1.saf.idx pop2.saf.idx -sfs pop1.pop2.ml -fstout out
+
+# get the global estimate
+../../../bin/angsd/misc/realSFS fst stats out.fst.idx
+
+# Result: FST.Unweight[nObs:1771942]:0.049392 Fst.Weight:0.049273
+
+# below is not tested that much, but seems to work
+../../../bin/angsd/misc/realSFS fst stats2 out.fst.idx -win 500 -step 100 > fst_win.txt
+
+## copy sfs to cache
+cp fst_win.txt ../../cache/
 ```
 
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{bash, eval=FALSE}
+# bigger window - small output file 
+../../../bin/angsd/misc/realSFS fst stats2 out.fst.idx -win 5000 -step 1000 > fst2_win.txt
+## copy sfs to cache
+cp fst2_win.txt ../../cache/
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+# module load R
+```{bash, eval=FALSE}
+# module load R
+# R
+s <- scan('out.sfs') 
+
+# R studio
+s <- scan('cache/out.sfs')  #read in the log sfs
+s <- s[-c(1,length(s))] #plot variable sites
+s <- s/sum(s)
+barplot(s,names=1:length(s), main='SFS')
+```
+
+## Histogram distribution of the theta values
+```{r, eval=FALSE}
+theta <- read.table("cache/theta.txt", header=FALSE)
+colnames(theta)
+# last sentence in R window: [ reached 'max' / getOption("max.print") -- omitted 3517353 rows ]
+theta2 <- read.table("theta.txt", header=FALSE)
+hist(theta$V4, main=Theta-Pairwise)
+```
+
+## Scatter plot of the Fst values
+```{r, eval=FALSE}
+fst <- read.table("cache/fst_win.txt", skip=1, header=FALSE)
+names(fst)[c(3,5)] <- c("midp", "fst")
+plot(fst$midp, fst$fst, xlab="Physical position", ylab="Fst", col="#a0615f", pch=16)
+```
+
+# 4. General feature format (GFF) from EnsemblPlant
+
+```{bash, eval=FALSE}
+wget ftp://ftp.ensemblgenomes.org/pub/plants/release-46/gff3/phaseolus_vulgaris/Phaseolus_vulgaris.PhaVulg1_0.46.gff3.gz
+gunzip Phaseolus_vulgaris.PhaVulg1_0.46.gff3.gz
+```
+
+# R to process the GFF3 file
+```{r, eval=FALSE}
+# install.package("data.table")
+library("data.table")
+## simply read in wouldn't work
+gff <- fread("largedata/Phaseolus_vulgaris.PhaVulg1_0.46.gff3", skip="#", header=FALSE, data.table=FALSE)
+## grep -v means select lines that not matching any of the specified patterns
+gff <- fread(cmd='grep -v "#" Phaseolus_vulgaris.PhaVulg1_0.46.gff3', header=FALSE, data.table=FALSE)
+
+names(gff) <- c("seq", "source", "feature", "start", "end", "score", "strand", "phase", "att")
+table(gff$feature)
+```
+
+## Get genes and upstream and downstream 5kb regions
+
+```{r, eval=FALSE}
+g <- subset(gff, feature %in% "gene")
+g$geneid <- gsub(".*gene:|;biotype.*", "", g$att)
+### + strand
+gp <- subset(g, strand %in% "+") 
+# nrow(gp) 14141
+
+### get the 5k upstream of the + strand gene model
+gp_up <- gp
+gp_up$end <- gp_up$start - 1
+gp_up$start <- gp_up$end - 5000 
+
+### get the 5k downstream of the + strand gene model
+gp_down <- gp
+gp_down$start <- gp_down$end + 1
+gp_down$end <- gp_down$start + 5000 
+```
+
+## Get genes upstream and downstream 5kb regions
+
+```{r echo=FALSE, eval=FALSE}
+g <- subset(gff, feature %in% "gene")
+g$geneid <- gsub(".*gene:|;biotype.*", "", g$att)
+### - strand
+gm <- subset(g, strand %in% "-") 
+# nrow(gm) 13993
+
+### get the 5k upstream of the + strand gene model
+gm_up <- gm
+gm_up$start <- gm_up$end + 1
+gm_up$end <- gm_up$start + 5000 
+
+### get the 5k downstream of the + strand gene model
+gm_down <- gm
+gm_down$end <- gm_down$start - 1
+gm_down$start <- gm_down$end - 5000 
+
+gup <- rbind(gp_up, gm_up)
+
+fwrite(gup, "../esb-agro932/cache/mt_gene_up5k.txt", sep="\t", row.names = FALSE, quote=FALSE)
+
+gdown <- rbind(gp_down, gm_down)
+
+fwrite(gdown, "../esb-agro932/cache/mt_gene_down5k.txt", sep="\t", row.names = FALSE, quote=FALSE)
+```
+
+```{r, eval=FALSE}
+### - strand
+gm <- subset(g, strand %in% "-") 
+dim(gm) # 13993    10
+fwrite(g, "../esb-agro932/cache/mt_gene.txt", sep="\t", row.names = FALSE, quote=FALSE)
+```
+
+Interpret theta results
+```{r, eval=FALSE}
+library("data.table")
+library("GenomicRanges")
+library("plyr")
+
+theta <- fread("../esb-agro932/cache/theta.txt", data.table=FALSE) # Putty
+theta <- data.table("cache/theta.txt", data.table=FALSE) # Local
+names(theta)[1] <- "seq"
+up5k <- data.table("cache/mt_gene_up5k.txt", header=TRUE) # local
+up5k <- data.table("../esb-agro932/cache/mt_gene_up5k.txt", header=TRUE) # Putty
+
+
+### define the subject file for theta values
+grc <- with(theta, GRanges(seqnames=seq, IRanges(start=Pos, end=Pos)))
+
+
+######## CONTINUE HERE
+### define the query file for genomic feature
+grf <- with(up5k, GRanges(seqnames=seq, IRanges(start=start, end=end), geneid=geneid))
+    
+### find overlaps between the two
+tb <- findOverlaps(query=grf, subject=grc)
+tb <- as.matrix(tb)
+    
+out1 <- as.data.frame(grf[tb[,1]])
+out2 <- as.data.frame(grc[tb[,2]])
+
+### for each genomic feature, find the sites with non-missing data
+out <- cbind(out1, out2[, "start"]) 
+names(out)[ncol(out)] <- "pos"
+```
+
