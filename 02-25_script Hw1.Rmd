@@ -12,7 +12,6 @@ knitr::opts_chunk$set(echo = TRUE)
 # 1. Version-controlled directory system
    https://github.com/esanchezb/esb-agro932.git
  
-
 # Download Phaseolus reference genome
 #### from https://plants.ensembl.org/Phaseolus_vulgaris/Info/Index
 ```{bash, eval=FALSE}
@@ -20,15 +19,18 @@ wget ftp://ftp.ensemblgenomes.org/pub/plants/release-46/fasta/phaseolus_vulgaris
 ```
 
 #### Unzip reference genome file
-```{r}
+```{bash, eval=FALSE}
 gunzip Phaseolus_vulgaris.PhaVulg1_0.dna_sm.nonchromosomal.fa.gz 
-```
 
+mv Phaseolus_vulgaris.PhaVulg1_0.dna_sm.nonchromosomal.fa PhaVulg1_0.fa
+
+bwa index PhaVulg1_0.fa
+```
 
 # 2. Simulation strategy and the hypothesis to test (positive, negative, or neutral selection)
 
 - Reference (about 6.268 kb)
-    Phaseolus_vulgaris.v1_0.fa
+    PhaVulg1_0.fa
 - 20x coverage
     N 5000
 - PE 100bp
@@ -40,14 +42,13 @@ gunzip Phaseolus_vulgaris.PhaVulg1_0.dna_sm.nonchromosomal.fa.gz
 
 #### simulation
 ```{bash, eval=FALSE}
-for i in {1..10}; do    wgsim ../../largedata/Phaseolus_vulgaris.v1_0.fa -e 0 -d 500 -N 5000 -1 100 -2 100 -r 0.01  -R 0 -X 0 l$i.read1.fq l$i.read2.fq; done
+for i in {1..10}; do    wgsim ../../largedata/PhaVulg1_0.fa -e 0 -d 500 -N 5000 -1 100 -2 100 -r 0.01  -R 0 -X 0 l$i.read1.fq l$i.read2.fq; done
 ```
 
 #### count reads
-```{r}
+```{bash, eval=FALSE}
 wc -l l7.read2.fq
 ```
-
 
 # Align the NGS reads to the reference genome
 
@@ -58,7 +59,7 @@ module load bwa samtools
 bwa index Phaseolus_vulgaris.v1_0.fa
 
 # bwa mem to align the reads to the reference genome 
-for i in {1..10}; do bwa mem ../../largedata/Phaseolus_vulgaris.v1_0.fa l$i.read1.fq l$i.read2.fq | samtools view -bSh - > l$i.bam; done
+for i in {1..10}; do bwa mem ../../largedata/PhaVulg1_0.fa l$i.read1.fq l$i.read2.fq | samtools view -bSh - > l$i.bam; done
 
 # sort 
 for i in *.bam; do samtools sort $i -o sorted_$i; done
@@ -70,11 +71,36 @@ for i in sorted*.bam; do samtools index $i; done
 samtools flagstat sorted_l1.bam
 ```
 
-# A procedure to calculate $\theta$ and $F_{ST}$ values
-```{r}
-
+```{bash, eval=FALSE}
+# write the bam files to a txt file
+mkdir bam_files
+mv sorted*.bam bam_files
+cd bam_files
+ls sorted*.bam > bam.txt
 ```
 
+```{bash, eval=FALSE}
+# run angsd
+../../../bin/angsd/angsd -bam bam.txt -doSaf 1 -anc ../../../largedata/PhaVulg1_0.fa -GL 1  -out out_ang
+
+../../../bin/angsd/misc/realSFS out_ang.saf.idx > out.sfs
+
+cp out.sfs ../../cache/
+```
+
+# Calculate $\theta$ values
+```{bash, eval=FALSE}
+../../../bin/angsd/angsd -bam bam.txt -out out_ang -doThetas 1 -doSaf 1 -pest out.sfs -anc ../../../largedata/PhaVulg1_0.fa -GL 1
+
+../../../bin/angsd/misc/thetaStat print out_ang.thetas.idx > theta.txt
+
+cp theta.txt ../../cache/
+```
+
+# Calculate $F_{ST}$ values
+```{bash, eval=FALSE}
+
+```
 
 
 ## Including Plots
