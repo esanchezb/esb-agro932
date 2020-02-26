@@ -9,15 +9,73 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+# 1. Version-controlled directory system
+   https://github.com/esanchezb/esb-agro932.git
+ 
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+# Download Phaseolus reference genome
+#### from https://plants.ensembl.org/Phaseolus_vulgaris/Info/Index
+```{bash, eval=FALSE}
+wget ftp://ftp.ensemblgenomes.org/pub/plants/release-46/fasta/phaseolus_vulgaris/dna/Phaseolus_vulgaris.PhaVulg1_0.dna_sm.nonchromosomal.fa.gz
 ```
+
+#### Unzip reference genome file
+```{r}
+gunzip Phaseolus_vulgaris.PhaVulg1_0.dna_sm.nonchromosomal.fa.gz 
+```
+
+
+# 2. Simulation strategy and the hypothesis to test (positive, negative, or neutral selection)
+
+- Reference (about 6.268 kb)
+    Phaseolus_vulgaris.v1_0.fa
+- 20x coverage
+    N 5000
+- PE 100bp
+    -1 100 -2 100
+- Only SNP no Indel
+    -R 0 -X 0
+-	Mutation rate is low
+    -r 0.01
+
+#### simulation
+```{bash, eval=FALSE}
+for i in {1..10}; do    wgsim ../../largedata/Phaseolus_vulgaris.v1_0.fa -e 0 -d 500 -N 5000 -1 100 -2 100 -r 0.01  -R 0 -X 0 l$i.read1.fq l$i.read2.fq; done
+```
+
+#### count reads
+```{r}
+wc -l l7.read2.fq
+```
+
+
+# Align the NGS reads to the reference genome
+
+```{bash, eval=FALSE}
+module load bwa samtools
+
+# index the reference genome
+bwa index Phaseolus_vulgaris.v1_0.fa
+
+# bwa mem to align the reads to the reference genome 
+for i in {1..10}; do bwa mem ../../largedata/Phaseolus_vulgaris.v1_0.fa l$i.read1.fq l$i.read2.fq | samtools view -bSh - > l$i.bam; done
+
+# sort 
+for i in *.bam; do samtools sort $i -o sorted_$i; done
+
+# index ("Indexing a genome sorted BAM file allows one to quickly extract alignments overlapping particular genomic regions")
+for i in sorted*.bam; do samtools index $i; done
+
+# samtools flagstat – counts the number of alignments for each FLAG type
+samtools flagstat sorted_l1.bam
+```
+
+# A procedure to calculate $\theta$ and $F_{ST}$ values
+```{r}
+
+```
+
+
 
 ## Including Plots
 
