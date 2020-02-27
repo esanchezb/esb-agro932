@@ -184,10 +184,13 @@ gunzip Phaseolus_vulgaris.PhaVulg1_0.46.gff3.gz
 ```{r, eval=FALSE}
 # install.package("data.table")
 library("data.table")
+
 ## simply read in wouldn't work
-gff <- fread("largedata/Phaseolus_vulgaris.PhaVulg1_0.46.gff3", skip="#", header=FALSE, data.table=FALSE)
+gff <- fread("largedata/Phaseolus_vulgaris.PhaVulg1_0.46.gff3", skip="#", header=FALSE, data.table=FALSE) #?
+gff <- data.table("largedata/Phaseolus_vulgaris.PhaVulg1_0.46.gff3", skip="##", header=FALSE) #putty
+
 ## grep -v means select lines that not matching any of the specified patterns
-gff <- fread(cmd='grep -v "#" Phaseolus_vulgaris.PhaVulg1_0.46.gff3', header=FALSE, data.table=FALSE)
+gff <- fread(cmd='grep -v "#" largedata/Phaseolus_vulgaris.PhaVulg1_0.46.gff3', header=FALSE, data.table=FALSE)
 
 names(gff) <- c("seq", "source", "feature", "start", "end", "score", "strand", "phase", "att")
 table(gff$feature)
@@ -234,18 +237,18 @@ gm_down$start <- gm_down$end - 5000
 
 gup <- rbind(gp_up, gm_up)
 
-fwrite(gup, "../esb-agro932/cache/mt_gene_up5k.txt", sep="\t", row.names = FALSE, quote=FALSE)
+fwrite(gup, "esb-agro932/cache/mt_gene_up5k.txt", sep="\t", row.names = FALSE, quote=FALSE)
 
 gdown <- rbind(gp_down, gm_down)
 
-fwrite(gdown, "../esb-agro932/cache/mt_gene_down5k.txt", sep="\t", row.names = FALSE, quote=FALSE)
+fwrite(gdown, "esb-agro932/cache/mt_gene_down5k.txt", sep="\t", row.names = FALSE, quote=FALSE)
 ```
 
 ```{r, eval=FALSE}
 ### - strand
 gm <- subset(g, strand %in% "-") 
 dim(gm) # 13993    10
-fwrite(g, "../esb-agro932/cache/mt_gene.txt", sep="\t", row.names = FALSE, quote=FALSE)
+fwrite(g, "esb-agro932/cache/mt_gene.txt", sep="\t", row.names = FALSE, quote=FALSE)
 ```
 
 Interpret theta results
@@ -254,11 +257,14 @@ library("data.table")
 library("GenomicRanges")
 library("plyr")
 
-theta <- fread("../esb-agro932/cache/theta.txt", data.table=FALSE) # Putty
+theta <- fread("esb-agro932/cache/theta.txt", data.table=FALSE) # Putty
 theta <- data.table("cache/theta.txt", data.table=FALSE) # Local
 names(theta)[1] <- "seq"
 up5k <- data.table("cache/mt_gene_up5k.txt", header=TRUE) # local
-up5k <- data.table("../esb-agro932/cache/mt_gene_up5k.txt", header=TRUE) # Putty
+up5k <- data.table("esb-agro932/cache/mt_gene_up5k.txt", header=TRUE) # Putty doesn't work
+up5k <- read.table("esb-agro932/cache/mt_gene_up5k.txt", header=TRUE) # Putty doesn't work
+
+up5k <- read.delim("esb-agro932/cache/mt_gene_up5k.txt", header=TRUE) # read 10 variables
 
 
 ### define the subject file for theta values
@@ -281,3 +287,134 @@ out <- cbind(out1, out2[, "start"])
 names(out)[ncol(out)] <- "pos"
 ```
 
+```{r, eval=FALSE}
+#define unique identifier and merge with the thetas
+out$uid <- paste(out$seqnames, out$pos, sep="_")
+theta$uid <- paste(theta$seq, theta$Pos, sep="_")
+df <- merge(out, theta[, c(-1, -2)], by="uid")
+
+# for each upstream 5k region, how many theta values
+###ddply: This function splits data frames by variables and combines the result into a data frame
+mx <- ddply(df, .(geneid), summarise,  
+            Pairwise = mean(Pairwise, na.rm=TRUE),
+            thetaH = mean(thetaH, na.rm=TRUE),
+            nsites = length(uid))
+```
+
+
+Copy and paste everything above, and pack it into an `R` function:
+```{r, eval=FALSE}
+get_mean_theta <- function(gf_file="esb-agro932/cache/mt_gene_up5k.txt"){
+  
+  # gf_file: gene feature file [chr, ="cache/mt_gene_up5k.txt"]
+  
+  theta <- fread("esb-agro932/cache/theta.txt", data.table=FALSE)
+  names(theta)[1] <- "seq"
+  up5k <- read.delim(gf_file, header=TRUE)
+
+  ### define the subject file for theta values
+  grc <- with(theta, GRanges(seqnames=seq, IRanges(start=Pos, end=Pos)))
+  ### define the query file for genomic feature
+  grf <- with(up5k, GRanges(seqnames=seq, IRanges(start=start, end=end), geneid=geneid))
+    
+  ### find overlaps between the two
+  tb <- findOverlaps(query=grf, subject=grc)
+  tb <- as.matrix(tb)
+    
+  out1 <- as.data.frame(grf[tb[,1]])
+  out2 <- as.data.frame(grc[tb[,2]])
+  ### for each genomic feature, find the sites with non-missing data
+  out <- cbind(out1, out2[, "start"]) 
+  names(out)[ncol(out)] <- "pos"
+  #define unique identifier and merge with the thetas
+  out$uid <- paste(out$seqnames, out$pos, sep="_")
+  theta$uid <- paste(theta$seq, theta$Pos, sep="_")
+  df <- merge(out, theta[, c(-1, -2)], by="uid")
+  # for each upstream 5k region, how many theta values
+  mx <- ddply(df, .(geneid), summarise,
+            Pairwise = mean(Pairwise, na.rm=TRUE),
+            thetaH = mean(thetaH, na.rm=TRUE),
+            nsites = length(uid))
+  return(mx)
+}
+```
+
+since function didn't work I'll run separate the down5k
+```{r, eval=FALSE}
+
+  theta <- fread("esb-agro932/cache/theta.txt", data.table=FALSE)
+  names(theta)[1] <- "seq"
+  up5k <- read.delim("esb-agro932/cache/mt_gene_down5k.txt", header=TRUE)
+  
+  ### define the subject file for theta values
+  grcdw <- with(theta, GRanges(seqnames=seq, IRanges(start=Pos, end=Pos)))
+  ### define the query file for genomic feature
+  grfdw <- with(up5k, GRanges(seqnames=seq, IRanges(start=start, end=end), geneid=geneid))
+    
+  ### find overlaps between the two
+  tbdw <- findOverlaps(query=grf, subject=grc)
+  tbdw <- as.matrix(tb)
+    
+  out1dw <- as.data.frame(grf[tb[,1]])
+  out2dw <- as.data.frame(grc[tb[,2]])
+  ### for each genomic feature, find the sites with non-missing data
+  outdw <- cbind(out1dw, out2dw[, "start"]) 
+  names(outdw)[ncol(outdw)] <- "pos"
+  #define unique identifier and merge with the thetas
+  outdw$uid <- paste(outdw$seqnames, outdw$pos, sep="_")
+  theta$uid <- paste(theta$seq, theta$Pos, sep="_")
+  df <- merge(outdw, theta[, c(-1, -2)], by="uid")
+  # for each upstream 5k region, how many theta values
+  mxdown <- ddply(df, .(geneid), summarise,
+            Pairwise = mean(Pairwise, na.rm=TRUE),
+            thetaH = mean(thetaH, na.rm=TRUE),
+            nsites = length(uid))
+  
+
+```
+## Plot the results
+
+Run the customized R function
+
+```{r, eval=FALSE}
+### apply the function
+up5k <- get_mean_theta(gf_file="esb-agro932/cache/mt_gene_up5k.txt")
+down5k <- get_mean_theta(gf_file="esb-agro932/cache/mt_gene_down5k.txt")
+```
+
+And then plot the results:
+```{r, eval=FALSE}
+library("ggplot2")
+up5k$feature <- "up 5k"
+down5k$feature <- "down 5k"
+res <- rbind(up5k, down5k)
+ggplot(res, aes(x=feature, y=Pairwise, fill=feature)) + 
+  geom_violin(trim=FALSE)+
+  labs(title="Theta value", x="", y = "Log10 (theta)")+
+  geom_boxplot(width=0.1, fill="white")+
+  scale_fill_brewer(palette="Blues") + 
+  theme_classic()
+
+```
+
+Second plot (Santos)
+```{r, eval=FALSE}
+library("ggplot2")
+up5k_f <- get_mean_Fst(gf_file="esb-agro932/cache/mt_gene_up5k.txt")
+down5k_f <- get_mean_Fst(gf_file="esb-agro932/cache/mt_gene_down5k.txt")
+gene_f <- get_mean_Fst(gf_file="esb-agro932/cache/mt_gene.txt")
+
+up5k_f$feature <- "up 5k"
+down5k_f$feature <- "down 5k"
+gene_f$feature <- "genic"
+res_f <- rbind(up5k_f, down5k_f)
+res_nongenic_f <- res_f
+res_nongenic_f$feature <- "intergenic"
+res_t_f <- rbind(res_f, gene_f, res_nongenic_f)
+ggplot(res_t_f, aes(x=feature, y=Fst, fill=feature)) + 
+  geom_violin(trim=FALSE)+
+  labs(title="Fst distribution", x="", y = "Fst")+
+  geom_boxplot(width=0.1, fill="white")+
+  scale_fill_brewer(palette="greens") + 
+  theme_classic()
+```
