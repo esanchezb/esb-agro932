@@ -1,0 +1,129 @@
+---
+title: "Hw2-Script"
+title2: "Genetic variances"
+author: "Erika Sanchez"
+date: "3/31/2020"
+output: html_document
+---
+
+## Normalize the path:
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE) 
+knitr::opts_knit$set(root.dir=normalizePath('../../')) 
+```
+
+## Experimental design
+
+Variables: 
+ - Plant yield (g/plant)
+ - Cob Weight (g)
+ - Leaf angle, leaf width, stem width
+
+Three environments
+
+## Data
+### Flint-Garcia et al., 2009 data
+
+```{r}
+f <- read.delim("data/journal.pone.0007433.s002.txt", header=TRUE)
+# Convert missing data to NA
+f[f=="."] <- NA  # data table as a character
+str(f)
+
+# three or four environments  ###check??
+table(f$Env)
+
+# check your data
+f$TotKnlWt_Inbred
+class(f$TotKnlWt_Inbred)
+hist(as.numeric(f$TotKnlWt_Inbred))
+as.numeric(as.character(f$TotKnlWt_Inbred))
+hist(as.numeric(as.character(f$TotKnlWt_Inbred)))
+
+# continue exercise
+f$INBRED <- as.factor(f$INBRED)
+f$Env <- as.factor(f$Env)
+# tricky part, be careful:
+f$TotKnlWt_Inbred  <- as.numeric(as.character((f$TotKnlWt_Inbred)))
+fit <- lm(TotKnlWt_Inbred ~ INBRED + Env, data=f) # fit linear model data= dataframe
+
+summary(fit)
+plot(fit)
+
+anova(fit)
+```
+
+$$
+H^2 = \frac{V_G}{V_G + V_E}
+$$
+With $(V_G =  MS(G) - MS(error)/n$ 
+
+```{r}
+Vg =  (603.8 - 307.5)/4
+Ve = 307.5
+
+H2 = Vg/(Vg + Ve)
+H2
+```
+
+[1] 0.1941296
+
+head(f)
+colnames(f)
+
+```{r}
+# four environments
+table(f$Env)
+
+# check your data
+f$CobDia_Inbred
+class(f$CobDia_Inbred)
+hist(as.numeric(f$TotKnlWt_Inbred))
+as.numeric(as.character(f$CobDia_Inbred))
+hist(as.numeric(as.character(f$CobDia_Inbred)))
+
+# continue exercise
+f$INBRED <- as.factor(f$INBRED)
+f$Env <- as.factor(f$Env)
+# tricky part, be careful:
+f$CobDia_Inbred  <- as.numeric(as.character((f$CobDia_Inbred)))
+fit <- lm(CobDia_Inbred ~ INBRED + Env, data=f) # fit linear model data= dataframe
+
+summary(fit)
+plot(fit)
+
+anova(fit)
+```
+
+```{r}
+Vg =  (22.108 - 4.063)/4
+Ve = 4.063
+
+H2 = Vg/(Vg + Ve)
+H2
+```
+
+```{r}
+# tricky part, be careful:
+f$CobDia_Inbred  <- as.numeric(as.character((f$CobDia_Inbred)))
+fit <- lm(CobDia_Inbred ~ INBRED + Env + INBRED*Env, data=f)
+
+summary(fit)
+plot(fit)
+
+anova(fit)
+
+```
+
+```{r}
+
+f$TSLLEN_Inbred  <- as.numeric(as.character((f$TSLLEN_Inbred)))
+fit <- lm(TSLLEN_Inbred ~ INBRED + Env + INBRED*Env, data=f)
+
+summary(fit)
+plot(fit)
+
+anova(fit)
+
+```
