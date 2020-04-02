@@ -15,115 +15,171 @@ knitr::opts_knit$set(root.dir=normalizePath('../../'))
 
 ## Experimental design
 
+Population 1
+
 Variables: 
  - Plant yield (g/plant)
  - Cob Weight (g)
- - Leaf angle, leaf width, stem width
+ - Leaf width (cm)
 
-Three environments
+Environments:
+ - Homestead, FL (2002)
+ - Raleigh, NC (2003)
+ - Columbia, MO 
+ - Madison, WI
+ 
 
 ## Data
 ### Flint-Garcia et al., 2009 data
 
 ```{r}
-f <- read.delim("data/journal.pone.0007433.s002.txt", header=TRUE)
-# Convert missing data to NA
-f[f=="."] <- NA  # data table as a character
+f <- read.delim("data/journal.pone.0007433.s001.txt", header=TRUE)
 str(f)
+# Convert missing data to NA
+f[f=="."] <- NA  
 
-# three or four environments  ###check??
+
+# four environments in population 1
 table(f$Env)
 
-# check your data
-f$TotKnlWt_Inbred
-class(f$TotKnlWt_Inbred)
-hist(as.numeric(f$TotKnlWt_Inbred))
-as.numeric(as.character(f$TotKnlWt_Inbred))
-hist(as.numeric(as.character(f$TotKnlWt_Inbred)))
-
-# continue exercise
 f$INBRED <- as.factor(f$INBRED)
 f$Env <- as.factor(f$Env)
+
+
+# Trait 1: Yield
+## This trait was evaluated in two environments: North Carolina (03N) and Missouri (03M)
+# Inbred
+# check data
+f$PltYield_Inbred
+class(f$PltYield_Inbred)
+   # hist(as.numeric(f$PltYield_Inbred))
+   # as.numeric(as.character(f$PltYield_Inbred))
+hist(as.numeric(as.character(f$PltYield_Inbred)))
+
 # tricky part, be careful:
-f$TotKnlWt_Inbred  <- as.numeric(as.character((f$TotKnlWt_Inbred)))
-fit <- lm(TotKnlWt_Inbred ~ INBRED + Env, data=f) # fit linear model data= dataframe
+f$PltYield_Inbred  <- as.numeric(as.character((f$PltYield_Inbred)))
+fit_YInb <- lm(PltYield_Inbred ~ INBRED + Env, data=f) # fit linear model data= dataframe
 
-summary(fit)
-plot(fit)
+summary(fit_YInb)
+plot(fit_YInb)
+anova(fit_YInb)
 
-anova(fit)
+# Hybrid
+# check data
+f$PltYield_Hyb
+class(f$PltYield_Hyb)
+hist(as.numeric(as.character(f$PltYield_Hyb)))
+
+f$PltYield_Hyb  <- as.numeric(as.character((f$PltYield_Hyb)))
+fit_YHyb <- lm(PltYield_Hyb ~ INBRED + Env, data=f) 
+
+summary(fit_YHyb)
+plot(fit_YHyb)
+anova(fit_YHyb)
+
+# Trait 2: Cob Weight
+# Inbred
+# check data
+f$CobWt_Inbred
+class(f$CobWt_Inbred)
+hist(as.numeric(as.character(f$CobWt_Inbred)))
+
+f$CobWt_Inbred  <- as.numeric(as.character((f$CobWt_Inbred)))
+fit_CobInb <- lm(CobWt_Inbred ~ INBRED + Env, data=f)
+
+summary(fit_CobInb)
+plot(fit_CobInb)
+anova(fit_CobInb)
+
+# Hybrid
+# check data
+f$CobWt_Hyb
+class(f$CobWt_Hyb)
+hist(as.numeric(as.character(f$CobWt_Hyb)))
+
+f$CobWt_Hyb  <- as.numeric(as.character((f$CobWt_Hyb)))
+fit_CHyb <- lm(CobWt_Hyb ~ INBRED + Env, data=f) 
+
+summary(fit_CHyb)
+plot(fit_CHyb)
+anova(fit_CHyb)
+
+
+# Trait 3: Leaf width
+# Inbred
+# check data
+f$LFWDT_Inbred
+class(f$LFWDT_Inbred)
+hist(as.numeric(as.character(f$LFWDT_Inbred)))
+
+f$LFWDT_Inbred  <- as.numeric(as.character((f$LFWDT_Inbred)))
+fit_LFInb <- lm(LFWDT_Inbred ~ INBRED + Env, data=f)
+
+summary(fit_LFInb)
+plot(fit_LFInb)
+anova(fit_LFInb)
+
+# Hybrid
+# check data
+f$LFWDT_Hyb
+class(f$LFWDT_Hyb)
+hist(as.numeric(as.character(f$LFWDT_Hyb)))
+
+f$LFWDT_Hyb  <- as.numeric(as.character((f$LFWDT_Hyb)))
+fit_LHyb <- lm(LFWDT_Hyb ~ INBRED + Env, data=f) 
+
+summary(fit_LHyb)
+plot(fit_LHyb)
+anova(fit_LHyb)
+
+
 ```
 
 $$
 H^2 = \frac{V_G}{V_G + V_E}
 $$
-With $(V_G =  MS(G) - MS(error)/n$ 
+With $(V_G =  MS(G) - MS(error)/e$ 
 
 ```{r}
-Vg =  (603.8 - 307.5)/4
-Ve = 307.5
+# Heritabilities
 
-H2 = Vg/(Vg + Ve)
-H2
+## Yield
+
+# Inbred
+Va_YI =  (549.08 - 358.99)/2
+Ve_YI = 358.99
+H2_YI = Va_YI/(Va_YI + Ve_YI)
+
+# Hybrid
+Vg_Yh =  (2332 - 1210)/2
+Ve_Yh = 1210
+H2_Yh = Vg_Yh/(Vg_Yh + Ve_Yh)
+
+
+# Cob Weigth
+
+# Inbred
+Va_CI =  (48.15 - 14.05)/4
+Ve_CI = 14.05
+H2_CI = Va_CI/(Va_CI + Ve_CI)
+
+# Hybrid
+Vg_Ch =  (78.19 - 19.55)/4
+Ve_Ch = 19.55
+H2_Ch = Vg_Ch/(Vg_Ch + Ve_Ch)
+
+
+# Leaf width
+
+# Inbred
+Va_Lf =  (508.3 - 42.4)/4
+Ve_Lf = 42.4
+H2_Lf = Va_Lf/(Va_Lf + Ve_Lf)
+
+# Hybrid
+Vg_Lf =  (181.42 - 42.19)/4
+Ve_Lf = 42.19
+H2_Lf = Vg_Lf/(Vg_Lf + Ve_Lf)
 ```
 
-[1] 0.1941296
 
-head(f)
-colnames(f)
-
-```{r}
-# four environments
-table(f$Env)
-
-# check your data
-f$CobDia_Inbred
-class(f$CobDia_Inbred)
-hist(as.numeric(f$TotKnlWt_Inbred))
-as.numeric(as.character(f$CobDia_Inbred))
-hist(as.numeric(as.character(f$CobDia_Inbred)))
-
-# continue exercise
-f$INBRED <- as.factor(f$INBRED)
-f$Env <- as.factor(f$Env)
-# tricky part, be careful:
-f$CobDia_Inbred  <- as.numeric(as.character((f$CobDia_Inbred)))
-fit <- lm(CobDia_Inbred ~ INBRED + Env, data=f) # fit linear model data= dataframe
-
-summary(fit)
-plot(fit)
-
-anova(fit)
-```
-
-```{r}
-Vg =  (22.108 - 4.063)/4
-Ve = 4.063
-
-H2 = Vg/(Vg + Ve)
-H2
-```
-
-```{r}
-# tricky part, be careful:
-f$CobDia_Inbred  <- as.numeric(as.character((f$CobDia_Inbred)))
-fit <- lm(CobDia_Inbred ~ INBRED + Env + INBRED*Env, data=f)
-
-summary(fit)
-plot(fit)
-
-anova(fit)
-
-```
-
-```{r}
-
-f$TSLLEN_Inbred  <- as.numeric(as.character((f$TSLLEN_Inbred)))
-fit <- lm(TSLLEN_Inbred ~ INBRED + Env + INBRED*Env, data=f)
-
-summary(fit)
-plot(fit)
-
-anova(fit)
-
-```
