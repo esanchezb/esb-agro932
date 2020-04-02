@@ -140,46 +140,77 @@ H^2 = \frac{V_G}{V_G + V_E}
 $$
 With $(V_G =  MS(G) - MS(error)/e$ 
 
+
 ```{r}
 # Heritabilities
 
 ## Yield
 
-# Inbred
+### Inbred
 Va_YI =  (549.08 - 358.99)/2
 Ve_YI = 358.99
 H2_YI = Va_YI/(Va_YI + Ve_YI)
 
-# Hybrid
+### Hybrid
 Vg_Yh =  (2332 - 1210)/2
 Ve_Yh = 1210
 H2_Yh = Vg_Yh/(Vg_Yh + Ve_Yh)
 
 
-# Cob Weigth
+## Cob Weigth
 
-# Inbred
+### Inbred
 Va_CI =  (48.15 - 14.05)/4
 Ve_CI = 14.05
 H2_CI = Va_CI/(Va_CI + Ve_CI)
 
-# Hybrid
+### Hybrid
 Vg_Ch =  (78.19 - 19.55)/4
 Ve_Ch = 19.55
 H2_Ch = Vg_Ch/(Vg_Ch + Ve_Ch)
 
 
-# Leaf width
+## Leaf width
 
-# Inbred
-Va_Lf =  (508.3 - 42.4)/4
-Ve_Lf = 42.4
-H2_Lf = Va_Lf/(Va_Lf + Ve_Lf)
+### Inbred
+Va_LI =  (508.3 - 42.4)/4
+Ve_LI = 42.4
+H2_LI = Va_LI/(Va_LI + Ve_LI)
 
-# Hybrid
-Vg_Lf =  (181.42 - 42.19)/4
-Ve_Lf = 42.19
-H2_Lf = Vg_Lf/(Vg_Lf + Ve_Lf)
+### Hybrid
+Vg_Lh =  (181.42 - 42.19)/4
+Ve_Lh = 42.19
+H2_Lh = Vg_Lh/(Vg_Lh + Ve_Lh)
 ```
 
 
+```{r}
+# Correlation between heterosis and heritability 
+H2_Inb <- c(H2_YI, H2_CI, H2_LI)
+H2_Hyb <- c(H2_Yh, H2_Ch, H2_Lh)
+
+# Heterosis was shown in Flint's paper (Table 1)
+AvgBPH_Het <- c(1.85, 0.66, 0.09)
+Trait <- c("Plant Yield", "Cob Weight", "Leaf width")
+HeH2 <- data.frame(Trait = Trait, H2_Inb = H2_Inb, H2_Hyb = H2_Hyb , AvgBPH_Het = AvgBPH_Het)
+
+#Inbred
+cor.test(HeH2$H2_Inb, HeH2$AvgBPH_Het, method = "pearson")
+#Hybrid
+cor.test(HeH2$H2_Hyb, HeH2$AvgBPH_Het, method = "pearson")
+
+```
+
+
+```{r}
+# Visualization
+
+Het <- data.frame(Trait = rep(HeH2$Trait, 2), H2 = c(H2_Inb, H2_Hyb), InHy = rep(c("Inbred", "Hybrid"), each =3), AvgBPH_Het = rep(AvgBPH_Het, 2))
+Het$H2 <- round(Het$H2, 3)
+
+library(ggplot2)
+ggplot(Het, aes(x=H2, y=AvgBPH_Het, color=InHy, shape=InHy)) +
+  geom_point() + 
+  geom_smooth(method=lm, aes(fill=InHy))
+
+```
