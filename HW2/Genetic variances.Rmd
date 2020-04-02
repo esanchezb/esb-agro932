@@ -1,6 +1,5 @@
 ---
-title: "Hw2-Script"
-title2: "Genetic variances"
+title: "Hw2 -Genetic variances"
 author: "Erika Sanchez"
 date: "3/31/2020"
 output: html_document
