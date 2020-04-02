@@ -204,12 +204,12 @@ cor.test(HeH2$H2_Hyb, HeH2$AvgBPH_Het, method = "pearson")
 ```{r}
 # Visualization
 
-Het <- data.frame(Trait = rep(HeH2$Trait, 2), H2 = c(H2_Inb, H2_Hyb), InHy = rep(c("Inbred", "Hybrid"), each =3), AvgBPH_Het = rep(AvgBPH_Het, 2))
-Het$H2 <- round(Het$H2, 3)
+Het <- data.frame(Trait = rep(HeH2$Trait, 2), H2 = c(H2_Inb, H2_Hyb), HI = rep(c("Inbred", "Hybrid"), each =3), AvgBPH_Het = rep(AvgBPH_Het, 2))
+Het$H2 <- round(Het$H2, 4)
 
 library(ggplot2)
-ggplot(Het, aes(x=H2, y=AvgBPH_Het, color=InHy, shape=InHy)) +
+ggplot(Het, aes(x=H2, y=AvgBPH_Het, color=HI, shape=HI)) +
   geom_point() + 
-  geom_smooth(method=lm, aes(fill=InHy))
+  geom_smooth(method=lm, aes(fill=HI))
 
 ```
