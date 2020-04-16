@@ -10,16 +10,28 @@ knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(root.dir=normalizePath('../../')) 
 ```
 
+# 2. Place the following system of equations in matrix form and solve it using R.
+```{r}
+D <- matrix(c(5, 6, 3, -4), nrow = 2, byrow = T)
+y <- matrix(c(3, -6), nrow = 2, byrow = T)
+
+X = solve(D) %*% y
+
+# X1 = -0.6315789
+# X2 =  1.0263158
+```
+
+
 ```{r, eval=FALSE}
 # read phenotype and SNP files
 geno_file <- "https://jyanglab.com/img/data/Snp_Data.csv"
-pheno <- read.csv("Data3/DATA_rootnum_age10_rootnum.csv", , header=TRUE, stringsAsFactors = FALSE)
+pheno <- read.csv("Data3/DATA_rootnum_age10_rootnum.csv", header=TRUE, stringsAsFactors = FALSE)
 str(pheno)
 
 # hist(pheno$Derregressed_BV, xlab="BV", col = "blue", breaks=100)
 
 geno <- read.csv(geno_file, header=TRUE, stringsAsFactors = FALSE)
-dim(geno)
+dim(geno)  # 926 4854
 # geno[1:10, 1:10]
 
 ```
@@ -33,8 +45,8 @@ There are some accessions containing no phenotype. We need to remove these acces
 
 ```{r, eval=FALSE}
 head(pheno)
-is.na(pheno$Derregressed_BV)
-sum(is.na(pheno$Derregressed_BV))
+#is.na(pheno$Derregressed_BV)
+#sum(is.na(pheno$Derregressed_BV))
 
 na.index <-  which(is.na(pheno$Derregressed_BV))
 head(pheno[na.index,])
@@ -50,7 +62,8 @@ y <- matrix(y, ncol=1)
 
 
 # markers 
-geno <- geno[,-1] # 861 x 4853
+geno <- geno[,-1] # 925 x 4853
+
 geno[geno == -9] <- NA
 ```
 
@@ -96,11 +109,11 @@ idx1 <- which(missing > 0.2) #155
 idx2 <- which(maf < 0.05) #1640
 # length(idx2)
 idx <- unique(c(idx1, idx2)) #1779
+
 geno2 <- geno[, -idx]
 dim(geno2)
 # 925 individuals
 # 3074 SNPs
-
 ```
 
 --
@@ -111,7 +124,6 @@ Replace missing marker genotypes with __mean values__. Then store the marker gen
 
 ```{r, eval=FALSE, echo=TRUE}
 Z <- matrix(0, ncol=ncol(geno2), nrow=nrow(geno2))
-
 for (j in 1:ncol(geno2)){
   #cat("j = ", j, '\n')
   Z[,j] <- ifelse(is.na(geno2[,j]), mean(geno2[,j], na.rm=TRUE), geno2[,j])
@@ -157,7 +169,7 @@ G <- G + diag(n)*0.001
 
 Set up mixed model equations (MME) by fitting the model:
 
-  $$\mathbf{y = mu + Zu + e}$$
+  $$\mathbf{y = 1mu + Zu + e}$$
   
 - where $\mu$ is the intercept, 
 - $\mathbf{Z}$ is the incident matrix of individuals, 
@@ -167,7 +179,7 @@ Set up mixed model equations (MME) by fitting the model:
 Directly take the inverse of LHS to obtain the solutions for GBLUP. Report the estimates of intercept and additive genetic values. Use $\lambda = 1.35$. 
 
 ```{r, eval=FALSE, echo=TRUE}
-lambda <- 1.35 # fit$Ve / fit$Vm
+lambda <- 4.087116 # fit$Ve / fit$Vu
 Ginv <- solve(G)
 ones <- matrix(1, ncol=1, nrow=n)
 Z <- diag(n)
@@ -198,18 +210,18 @@ Fit GBLUP by using the `mixed.solve` function in the [rrBLUP](https://cran.r-pro
 library(rrBLUP)
 fit <- mixed.solve(y = y, K=G)
 # additive genetic variance
-fit$Vu
+fit$Vu  # 0.183041
 # residual variance
-fit$Ve
+fit$Ve  # 0.7481098
 # intercept 
-fit$beta
+fit$beta  #0.3209913
 # additive genetic values
-head(fit$u)
-tail(fit$u)
+head(fit$u)  #  0.072260392  0.150216939  0.174664294  0.099737579 -0.046509316 -0.009981462
+tail(fit$u)  # -0.33182251 -0.22108118  0.16429294 -0.32358147  0.05502070  0.04563863
 # genomic h2
-fit$Vu / (fit$Vu + fit$Ve)
+fit$Vu / (fit$Vu + fit$Ve)  # 0.196575
 # ratio of variance components 
-fit$Ve / fit$Vu
+fit$Ve / fit$Vu  # 4.087116
 # plot(x=sol[-1], y=fit$u)
 ```
 
@@ -240,7 +252,7 @@ Directly take the inverse of LHS to obtain the solutions for marker-based GBLUP 
 --
 
 ```{r, eval=FALSE, echo=TRUE}
-lambda <- 4326.212 # fit$Ve / fit$Vu
+lambda <- 12566.89 # fit$Ve / fit$Vu
 ones <- matrix(1, ncol=1, nrow=n)
 I <- diag(m)
 LHS1 <- cbind(crossprod(ones), crossprod(ones, Zs)) 
@@ -250,16 +262,8 @@ RHS <- rbind( crossprod(ones, y), crossprod(Zs,y) )
 sol2 <- solve(LHS, RHS)
 head(sol2)
 
-              [,1]
-[1,]  0.3209913075 # marker effect 1
-[2,] -0.0008787525 # marker effect 2
-[3,] -0.0008719956
-[4,]  0.0005849444
-[5,]  0.0020249830
-[6,] -0.0013176456
-
 tail(sol2)
-dim(sol2)
+dim(sol2)  # 3075 1
 
 eff <- sol2[-1]
 head(eff)
@@ -277,21 +281,22 @@ Fit RR-BLUP by using the `mixed.solve` function in the [rrBLUP](https://cran.r-p
 - Also, report the ratio of variance components $\lambda = \frac{V_e}{V_A}$. 
 
 ```{r, eval=FALSE, echo=TRUE}
-library(rrBLUP)
+# library(rrBLUP)
 fit2 <- mixed.solve(y = y, Z=Zs)
 # marker additive genetic variance
-fit2$Vu
+fit2$Vu  # 5.95448e-05
 # residual variance
-fit2$Ve
+fit2$Ve  # 0.748293
+#lambdam <- fit2$Ve / fit2$Vu
 # intercept 
-fit2$beta
+fit2$beta  #0.3209913
 # marker additive genetic effects
-head(fit2$u)
-tail(fit2$u)
+head(fit2$u)  # -9.350591e-04 -6.481214e-04  5.190782e-05  1.678574e-03 -7.281788e-04  5.914193e-04
+tail(fit2$u)  # -0.0004535828 -0.0012186536 -0.0029996251 -0.0009307838 -0.0013001596  0.0002263254
 # ratio of variance components 
 fit2$Ve / fit2$Vu
 plot(x=sol2[-1], y=fit2$u) # make comparison # y=fit2$u - estimated values
-cor(x=sol2[-1], y=fit2$u)
+cor(x=sol2[-1], y=fit2$u)  # 0.9745928
 ```
 
 ---
@@ -303,7 +308,7 @@ Repeat GBLUP but treat the first 600 individuals as a training set and predict t
 
 ```{r, eval=FALSE, echo=TRUE}
 n.trn <- 600
-n.tst <- 261
+n.tst <- 325
 y.trn <- y[1:n.trn]
 y.tst <- y[n.trn+1:n.tst]
 Zs.trn <- Zs[1:n.trn,]
@@ -311,7 +316,7 @@ Zs.tst <- Zs[n.trn+1:n.tst,]
 Gtrn <- tcrossprod(Zs.trn) / ncol(Zs.trn)
 Gtrn <- Gtrn + diag(n.trn)*0.001
 Gtst.trn <- tcrossprod(Zs.tst, Zs.trn) / ncol(Zs.tst)
-#Gtrn <- G[1:n.trn, 1:n.trn]
+# Gtrn <- G[1:n.trn, 1:n.trn]
 #Gtst.trn <- G[n.trn+1:n.tst, 1:n.trn]
 lambda <- 1.348411 # fit$Ve / fit$Vu
 Ginv.trn <- solve(Gtrn)
@@ -324,8 +329,9 @@ RHS <- rbind( crossprod(ones, y.trn), crossprod(Z,y.trn) )
 sol.trn <- solve(LHS, RHS)
 # prediction
 y.hat <- Gtst.trn %*% Ginv.trn %*% matrix(sol.trn[c(2:(n.trn+1))])
-cor(y.hat, y[(n.trn+1):n])
+GBLUP.trn <- cor(y.hat, y[(n.trn+1):n])  # 0.3056621
 # plot(y.hat, y[(n.trn+1):n])
+
 ```
 
 ---
@@ -349,7 +355,20 @@ RHS <- rbind( crossprod(ones, y.trn), crossprod(Zs.trn, y.trn) )
 sol.trn <- solve(LHS, RHS)
 # prediction
 y.hat2 <- Zs.tst %*% matrix(sol.trn[-1])
-# cor(y.hat2, y[(n.trn+1):n])
+rrBLUP.trn <- cor(y.hat2, y[(n.trn+1):n])  # 0.307539
 # plot(y.hat2, y[(n.trn+1):n])
 ```
 
+###Visualization
+
+```{r}
+library(ggplot2)
+
+plot_acc <- data.frame(accuracy= c(GBLUP.trn, rrBLUP.trn),method = c(rep("GBLUP", 10), rep("rrBLUP", 10))  )
+
+acc <- ggplot(plot_acc, aes(x=method, y=accuracy, fill=method)) + 
+  geom_violin(trim=FALSE)+
+  geom_boxplot(width=0.1, fill="white")+
+  labs(title="Prediction Accuracy by GBLUP and rrBLUP", x="Method", y = "Prediction Accuracy")
+acc + theme_classic() + theme(legend.position = "none")
+```
