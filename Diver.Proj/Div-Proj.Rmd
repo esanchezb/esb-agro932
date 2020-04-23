@@ -1,0 +1,261 @@
+---
+title: "Proj-Diversity"
+author: "Erika Sanchez"
+date: "4/18/2020"
+output: NULL
+---
+
+## Normalize the path:
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir=normalizePath('../../')) 
+```
+
+# Download Phaseolus reference genome
+#### from https://plants.ensembl.org/Phaseolus_vulgaris/Info/Index
+```{bash, eval=FALSE}
+wget ftp://ftp.ensemblgenomes.org/pub/plants/release-46/fasta/phaseolus_vulgaris/dna/Phaseolus_vulgaris.PhaVulg1_0.dna.toplevel.fa.gz
+```
+
+#### Unzip reference genome file
+```{bash, eval=FALSE}
+gunzip Phaseolus_vulgaris.PhaVulg1_0.dna.toplevel.fa.gz 
+mv Phaseolus_vulgaris.PhaVulg1_0.dna.toplevel.fa. PVulg1_0
+bwa index PVulg1_0
+```
+
+# 2. 96 samples obtained by Whole-genomes sequencing
+
+- Reference (about 6.268 kb)
+    PVulg1_0.fa
+- 0.5x coverage
+- PE 300bp
+  -1 150 -2 150
+
+# Align the NGS reads to the reference genome
+```{bash, eval=FALSE}
+# script "align": index the reference genome, align the reads to the reference genome
+sbatch --array=1-96 align.slurm 
+
+# script "bam": sort, index 
+sbatch --array=1-96 bam.slurm
+```
+
+```{bash, eval=FALSE}
+# write the bam files to a txt file
+mkdir bam_files
+mv *sorted.bam bam_files
+cd bam_files
+ls sorted.bam > bam.txt
+cp bam.txt bam-and.txt 
+cp bam.txt bam-meso.txt
+```
+
+```{bash, eval=FALSE}
+# run angsd (first for the entire population)
+../../../bin/angsd/angsd -bam bam.txt -doSaf 1 -anc ../../Ref_Pvulgaris/PVulg1_0.fa -GL 1  -out out_And_ang
+
+../../../bin/angsd/misc/realSFS out_ang.saf.idx > out.sfs
+
+cp out.sfs ../../data/
+```
+
+```{bash, eval=FALSE}
+#first generate .saf file
+../../../bin/angsd/angsd -bam bam.txt -doSaf 1 -out smallFolded -anc ../../Ref_Pvulgaris/PVulg1_0.fa -GL 2
+#now try the EM optimization with 4 threads
+../../../bin/angsd/misc/realSFS smallFolded.saf.idx -maxIter 100 -P 4 > smallFolded.sfs
+#in R
+sfs<-scan("cache/smallFolded.sfs")
+barplot(sfs[-1])
+```
+
+# Calculate $\theta$ values
+```{bash, eval=FALSE}
+../../../bin/angsd/angsd -bam bam.txt -out out_ang -doThetas 1 -doSaf 1 -pest out.sfs -anc ../../Ref_Pvulgaris/PVulg1_0.fa -GL 1
+../../../bin/angsd/misc/thetaStat print out_ang.thetas.idx > theta.txt
+cp theta.txt ../../cache/
+```
+
+# Calculate $F_{ST}$ values
+```{bash, eval=FALSE}
+cp bam.txt pop1.txt
+cp bam.txt pop2.txt
+
+../../../bin/angsd/angsd -b bam-and.txt -anc ../../Ref_Pvulgaris/PVulg1_0.fa -out and -dosaf 1 -gl 1
+../../../bin/angsd/angsd -b bam-meso.txt -anc ../../Ref_Pvulgaris/PVulg1_0.fa -out meso -dosaf 1 -gl 1
+
+# calculate the 2dsfs prior
+../../../bin/angsd/misc/realSFS and.saf.idx meso.saf.idx > both.ml
+# prepare the fst for easy window analysis
+../../../bin/angsd/misc/realSFS fst index and.saf.idx meso.saf.idx -sfs both.ml -fstout out
+# get the global estimate
+../../../bin/angsd/misc/realSFS fst stats out.fst.idx
+
+# below is not tested that much, but seems to work
+../../../bin/angsd/misc/realSFS fst stats2 out.fst.idx -win 500 -step 100 > fst_win.txt
+
+## copy sfs to cache
+cp fst_win.txt ../../cache/
+```
+
+```{bash, eval=FALSE}
+# bigger window - small output file 
+../../../bin/angsd/misc/realSFS fst stats2 out.fst.idx -win 5000 -step 1000 > fst2_win.txt
+## copy sfs to cache
+cp fst2_win.txt ../../cache/
+```
+
+# module load R
+```{bash, eval=FALSE}
+# module load R
+# Rstudio
+s <- scan('cache/out.sfs')  #read in the log sfs
+s <- s[-c(1,length(s))] #plot variable sites
+s <- s/sum(s)
+barplot(s,names=1:length(s), main='SFS')
+```
+
+## Histogram distribution of the theta values
+```{r, eval=FALSE}
+theta <- read.table("cache/theta.txt", header=FALSE)
+colnames(theta)
+# last sentence in R window: [ reached 'max' / getOption("max.print") -- omitted 3517353 rows ]
+theta2 <- read.table("theta.txt", header=FALSE)
+hist(theta$V4, main=Theta-Pairwise)
+```
+
+## Scatter plot of the Fst values
+```{r, eval=FALSE}
+fst <- read.table("cache/fst_win.txt", skip=1, header=FALSE)
+names(fst)[c(3,5)] <- c("midp", "fst")
+plot(fst$midp, fst$fst, xlab="Physical position", ylab="Fst", col="#a0615f", pch=16)
+```
+
+# 4. General feature format (GFF) from EnsemblPlant
+```{bash, eval=FALSE}
+wget ftp://ftp.ensemblgenomes.org/pub/plants/release-46/gff3/phaseolus_vulgaris/Phaseolus_vulgaris.PhaVulg1_0.46.gff3.gz
+gunzip Phaseolus_vulgaris.PhaVulg1_0.46.gff3.gz
+mv Phaseolus_vulgaris.PhaVulg1_0.46.gff3 Pvul1_0.46.gff3
+```
+
+# R to process the GFF3 file
+```{r, eval=FALSE}
+# install.package("data.table")
+library("data.table")
+## simply read in wouldn't work
+gff <- fread("Ref_Pvulgaris/Pvul1_0.46.gff3", skip="#", header=FALSE, data.table=FALSE)
+gff <- data.table("Ref_Pvulgaris/Pvul1_0.46.gff3", skip="##", header=FALSE)
+## grep -v means select lines that not matching any of the specified patterns
+gff <- fread(cmd='grep -v "#" Ref_Pvulgaris/Pvul1_0.46.gff3', header=FALSE, data.table=FALSE)
+names(gff) <- c("seq", "source", "feature", "start", "end", "score", "strand", "phase", "att")
+table(gff$feature)
+```
+
+## Get genes and upstream and downstream 15kb regions
+```{r, eval=FALSE}
+g <- subset(gff, feature %in% "gene")
+g$geneid <- gsub(".*gene:|;biotype.*", "", g$att)
+### + strand
+gp <- subset(g, strand %in% "+") 
+# nrow(gp) 
+### get the 15k upstream of the + strand gene model
+gp_up <- gp
+gp_up$end <- gp_up$start - 1
+gp_up$start <- gp_up$end - 15000 
+### get the 15k downstream of the + strand gene model
+gp_down <- gp
+gp_down$start <- gp_down$end + 1
+gp_down$end <- gp_down$start + 15000 
+```
+
+## Get genes upstream and downstream 5kb regions
+```{r echo=FALSE, eval=FALSE}
+g <- subset(gff, feature %in% "gene")
+g$geneid <- gsub(".*gene:|;biotype.*", "", g$att)
+### - strand
+gm <- subset(g, strand %in% "-") 
+# nrow(gm)
+### get the 15k upstream of the + strand gene model
+gm_up <- gm
+gm_up$start <- gm_up$end + 1
+gm_up$end <- gm_up$start + 15000 
+### get the 15k downstream of the + strand gene model
+gm_down <- gm
+gm_down$end <- gm_down$start - 1
+gm_down$start <- gm_down$end - 15000 
+gup <- rbind(gp_up, gm_up)
+fwrite(gup, "esb-agro932/cache/mt_gene_up15k.txt", sep="\t", row.names = FALSE, quote=FALSE)
+gdown <- rbind(gp_down, gm_down)
+fwrite(gdown, "esb-agro932/cache/mt_gene_down15k.txt", sep="\t", row.names = FALSE, quote=FALSE)
+```
+
+```{r, eval=FALSE}
+### - strand
+gm <- subset(g, strand %in% "-") 
+dim(gm) # 
+fwrite(g, "esb-agro932/cache/mt_gene.txt", sep="\t", row.names = FALSE, quote=FALSE)
+```
+
+Interpret theta results
+```{r, eval=FALSE}
+library("data.table")
+library("GenomicRanges")
+library("plyr")
+theta <- fread("esb-agro932/cache/theta.txt", data.table=FALSE) # Putty
+
+```
+
+`R` function:
+```{r, eval=FALSE}
+get_mean_theta <- function(gf_file="esb-agro932/cache/mt_gene_up15k.txt"){
+  # gf_file: gene feature file [chr, ="cache/mt_gene_up15k.txt"]
+  theta <- fread("esb-agro932/cache/theta.txt", data.table=FALSE)
+  names(theta)[1] <- "seq"
+  up5k <- read.delim(gf_file, header=TRUE)
+  ### define the subject file for theta values
+  grc <- with(theta, GRanges(seqnames=seq, IRanges(start=Pos, end=Pos)))
+  ### define the query file for genomic feature
+  grf <- with(up15k, GRanges(seqnames=seq, IRanges(start=start, end=end), geneid=geneid))
+  ### find overlaps between the two
+  tb <- findOverlaps(query=grf, subject=grc)
+  tb <- as.matrix(tb)
+  out1 <- as.data.frame(grf[tb[,1]])
+  out2 <- as.data.frame(grc[tb[,2]])
+  ### for each genomic feature, find the sites with non-missing data
+  out <- cbind(out1, out2[, "start"]) 
+  names(out)[ncol(out)] <- "pos"
+  #define unique identifier and merge with the thetas
+  out$uid <- paste(out$seqnames, out$pos, sep="_")
+  theta$uid <- paste(theta$seq, theta$Pos, sep="_")
+  df <- merge(out, theta[, c(-1, -2)], by="uid")
+  # for each upstream 15k region, how many theta values
+  mx <- ddply(df, .(geneid), summarise,
+            Pairwise = mean(Pairwise, na.rm=TRUE),
+            thetaH = mean(thetaH, na.rm=TRUE),
+            nsites = length(uid))
+  return(mx)
+}
+```
+
+## Plot the results
+Run the customized R function
+```{r, eval=FALSE}
+### apply the function
+up15k <- get_mean_theta(gf_file="esb-agro932/cache/mt_gene_up15k.txt")
+down15k <- get_mean_theta(gf_file="esb-agro932/cache/mt_gene_down15k.txt")
+```
+
+And then plot the results:
+```{r, eval=FALSE}
+library("ggplot2")
+up15k$feature <- "up 15k"
+down15k$feature <- "down 15k"
+res <- rbind(up15k, down15k)
+ggplot(res, aes(x=feature, y=Pairwise, fill=feature)) + 
+  geom_violin(trim=FALSE)+
+  labs(title="Theta value", x="", y = "Log10 (theta)")+
+  geom_boxplot(width=0.1, fill="white")+
+  scale_fill_brewer(palette="Blues") + 
+  theme_classic()
+```
